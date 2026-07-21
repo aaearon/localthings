@@ -1,4 +1,5 @@
 import json
+import types
 from pathlib import Path
 
 import pytest
@@ -6,10 +7,8 @@ import pytest
 GOLDEN = Path(__file__).parent / 'fixtures' / 'golden'
 
 
-def _new_state_keys(name, resources):
+def _registry_for(resources):
     from custom_components.localthings.registry.by_type import for_device, for_device_by_model
-    from custom_components.localthings.registry.discovery import discover
-    from custom_components.localthings.registry.adapter import flatten
     otn = resources.get('/otninformation/vs/0', {})
     one_ui = otn.get('swVersionInfo', {}).get('oneUiVersion', '')
     info = resources.get('/information/vs/0', {})
@@ -19,14 +18,41 @@ def _new_state_keys(name, resources):
             info.get('x.com.samsung.da.modelNum', ''),
             info.get('x.com.samsung.da.description', ''),
         )
+    return reg
+
+
+def _discover(resources):
+    from custom_components.localthings.registry.discovery import discover
+    reg = _registry_for(resources)
     if reg is None:
         from custom_components.localthings.registry.registry import CAPABILITIES
         caps, pats = CAPABILITIES, []
     else:
         caps, pats = reg.capabilities, reg.pattern_capabilities
-    bound = discover(resources, caps, pats)
-    state = flatten(bound, resources)
-    return sorted(state.keys())
+    return reg, discover(resources, caps, pats)
+
+
+def _new_state_keys(name, resources):
+    from custom_components.localthings.registry.adapter import flatten
+    _, bound = _discover(resources)
+    return sorted(flatten(bound, resources).keys())
+
+
+def _new_discovery_unique_ids(resources):
+    """The entities that would actually be registered in HA, as
+    'samsung_<device_type>_<state_key>'.
+
+    Broader than state_keys: it runs the real entity.py inclusion gate, so it
+    also covers command-only entities (buttons) that flatten() has no value
+    for. Regenerate a golden's discovery_unique_ids with this, never by hand.
+    """
+    from custom_components.localthings.registry.adapter import _key
+    from custom_components.localthings.entity import _is_included
+    reg, bound = _discover(resources)
+    coordinator = types.SimpleNamespace(last_resources=resources)
+    name = reg.name if reg else 'unknown'
+    return sorted({f'samsung_{name}_{_key(b)}'
+                   for b in bound if _is_included(b, coordinator)})
 
 
 @pytest.mark.parametrize('name,ip', [
@@ -69,6 +95,18 @@ def test_registry_reproduces_golden_state_keys_for_dryer():
     )
 
 
+def test_registry_reproduces_golden_state_keys_for_refrigerator_tp1x():
+    from tests.conftest import _load_device
+    resources = _load_device('refrigerator_tp1x')
+    golden = json.loads((GOLDEN / 'refrigerator_tp1x.json').read_text())
+    state_keys = _new_state_keys('refrigerator_tp1x', resources)
+    assert set(state_keys) == set(golden['state_keys']), (
+        f"state_keys mismatch:\n"
+        f"  extra:   {sorted(set(state_keys) - set(golden['state_keys']))}\n"
+        f"  missing: {sorted(set(golden['state_keys']) - set(state_keys))}"
+    )
+
+
 def test_registry_reproduces_golden_state_keys_for_airconditioner():
     from tests.conftest import _load_device
     resources = _load_device('airconditioner')
@@ -78,6 +116,26 @@ def test_registry_reproduces_golden_state_keys_for_airconditioner():
         f"state_keys mismatch:\n"
         f"  extra:   {sorted(set(state_keys) - set(golden['state_keys']))}\n"
         f"  missing: {sorted(set(golden['state_keys']) - set(state_keys))}"
+    )
+
+
+# Goldens that also pin the registered-entity set, not just the value-bearing
+# state keys. Listed explicitly so a regeneration that drops the field fails
+# here instead of silently shrinking coverage.
+@pytest.mark.parametrize('name', ['dishwasher', 'refrigerator', 'refrigerator_tp1x'])
+def test_registry_reproduces_golden_discovery_unique_ids(name):
+    from tests.conftest import _load_device
+    resources = _load_device(name)
+    golden = json.loads((GOLDEN / f'{name}.json').read_text())
+    assert 'discovery_unique_ids' in golden, (
+        f"{name}.json lost its discovery_unique_ids -- regenerate it with "
+        f"_new_discovery_unique_ids(), don't drop the field"
+    )
+    unique_ids = _new_discovery_unique_ids(resources)
+    assert set(unique_ids) == set(golden['discovery_unique_ids']), (
+        f"discovery_unique_ids mismatch:\n"
+        f"  extra:   {sorted(set(unique_ids) - set(golden['discovery_unique_ids']))}\n"
+        f"  missing: {sorted(set(golden['discovery_unique_ids']) - set(unique_ids))}"
     )
 
 

@@ -11,7 +11,7 @@ against live device dumps:
   /filter/waterfilter/vs/0  -> x.com.samsung.da.filterUsage / filterStatus
 """
 from ..capability import Capability
-from ..entities import BinarySensorDesc, SensorDesc, SwitchDesc
+from ..entities import BinarySensorDesc, ButtonDesc, SensorDesc, SwitchDesc
 
 
 def _num(v):
@@ -197,5 +197,15 @@ WATER_FILTER = Capability(
                    icon='mdi:filter'),
         SensorDesc(key='filter_status', field='x.com.samsung.da.filterStatus',
                    name='Filter status', icon='mdi:filter-check'),
+        # Write contract unverified against hardware: assumed to be a write
+        # of the device's own filterResetType value back to the resource.
+        ButtonDesc(key='filter_reset', field='', name='Reset water filter',
+                   icon='mdi:filter-remove', entity_category='config',
+                   exists_fn=lambda rep, resources: bool(
+                       rep.get('x.com.samsung.da.filterResetType')),
+                   write_fn=lambda p, rep, href=None: (
+                       ['filter', 'waterfilter', 'vs', '0'],
+                       {'x.com.samsung.da.filterResetType':
+                        (rep.get('x.com.samsung.da.filterResetType') or [None])[0]})),
     ),
 )

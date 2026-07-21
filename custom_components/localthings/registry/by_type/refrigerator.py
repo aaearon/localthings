@@ -19,6 +19,8 @@ REGISTRY = DeviceRegistry(
         common.WATER_FILTER,
         fridge.ICEMAKER_NIGHTTIME,
         fridge.FLEX_ZONE,
+        fridge.MODE_FLAGS,
+        fridge.AI_ENERGY_LEVEL,
         fridge.REFRIGERATION,
         fridge.AUTOFILL,
         fridge.WELCOME_LIGHTING,
@@ -33,6 +35,7 @@ REGISTRY = DeviceRegistry(
         fridge.DOORS_FALLBACK,
         fridge.TEMPERATURES_FALLBACK,
         fridge.ICEMAKER_STATUS_FALLBACK,
+        fridge.ICEMAKER_STATUS_OCF_FALLBACK,
         fridge.REFRIGERATION_FALLBACK,
     ]),
     pattern_capabilities=[
