@@ -3,6 +3,7 @@ from custom_components.localthings.registry.adapter import flatten
 from custom_components.localthings.registry.by_type import for_device_by_model
 from custom_components.localthings.registry.capabilities import common, fridge, ignored
 from custom_components.localthings.registry.discovery import discover
+from custom_components.localthings.registry.entities import SelectDesc, SensorDesc
 
 from tests.conftest import _load_device
 
@@ -109,8 +110,9 @@ def test_ai_energy_level_hidden_with_a_single_supported_level():
 
 
 def test_ice_type_sensor_replaces_select_without_a_supported_list():
-    select, sensor = [e for e in fridge.ICEMAKER_GENERIC.entities
-                      if e.key == 'type']
+    ice_type = [e for e in fridge.ICEMAKER_GENERIC.entities if e.key == 'type']
+    select = next(e for e in ice_type if isinstance(e, SelectDesc))
+    sensor = next(e for e in ice_type if isinstance(e, SensorDesc))
     toggle = {'x.com.samsung.da.iceType.desired': 'NORMAL'}
     mode = dict(toggle, **{'x.com.samsung.da.iceType.supported': ['NORMAL']})
     assert sensor.exists_fn(toggle, {}) and not select.exists_fn(toggle, {})
