@@ -28,7 +28,7 @@ from ..entities import (
 )
 from .common import normalize_temp_unit
 
-# Display names for the beverage zone, flex zone, and
+# Display names for the beverage zone, flex zone, ice type, and
 # ice-making-status enums below live in strings.json / translations/en.json,
 # keyed by the lowercased raw device value — select.py and SensorDesc.options
 # normalize to lowercase for HA's translation lookup and map back to this
@@ -129,6 +129,13 @@ ICEMAKER_GENERIC = Capability(
                    name=None, icon='mdi:cube-outline',
                    value_fn=lambda v: v == 'On',
                    write_fn=_icemaker_write('x.com.samsung.da.iceMaker.state')),
+        SelectDesc(key='type', field='x.com.samsung.da.iceType.desired',
+                   name=None, icon='mdi:cube-outline',
+                   translation_key='ice_type',
+                   entity_category='config',
+                   options_field='x.com.samsung.da.iceType.supported',
+                   exists_fn=lambda rep, resources: bool(rep.get('x.com.samsung.da.iceType.supported')),
+                   write_fn=_icemaker_write('x.com.samsung.da.iceType.desired')),
     ),
 )
 

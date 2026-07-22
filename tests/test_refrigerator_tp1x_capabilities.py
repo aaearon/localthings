@@ -3,6 +3,7 @@ from custom_components.localthings.registry.adapter import flatten
 from custom_components.localthings.registry.by_type import for_device_by_model
 from custom_components.localthings.registry.capabilities import common, fridge, ignored
 from custom_components.localthings.registry.discovery import discover
+from custom_components.localthings.registry.entities import SelectDesc, SensorDesc
 
 from tests.conftest import _load_device
 
@@ -108,14 +109,24 @@ def test_ai_energy_level_hidden_with_a_single_supported_level():
     assert desc.exists_fn({'aiLevel': '1', 'supportedAiLevel': ['1', '2']}, {})
 
 
-def test_icemaker_generic_has_no_ice_type_entity():
-    """The TP1X's ice maker is on/off only (x.com.samsung.da.iceMaker.type is
-    'toggle' and iceType.desired is a fixed 'NORMAL' with no iceType.supported
-    list) -- ICEMAKER_GENERIC must not expose an ice-type select or sensor."""
-    assert not any(e.key == 'type' or e.translation_key == 'ice_type'
-                   for e in fridge.ICEMAKER_GENERIC.entities)
+def test_icemaker_generic_exposes_a_writable_ice_type_select():
+    """ICEMAKER_GENERIC exposes a writable ice-type select (gated on an
+    iceType.supported list), alongside making_status + enabled -- no
+    read-only ice-type sensor."""
     assert {e.key for e in fridge.ICEMAKER_GENERIC.entities} == {
-        'making_status', 'enabled'}
+        'making_status', 'enabled', 'type'}
+    ice_type = next(e for e in fridge.ICEMAKER_GENERIC.entities if e.key == 'type')
+    assert isinstance(ice_type, SelectDesc)
+    assert not isinstance(ice_type, SensorDesc)
+    assert ice_type.translation_key == 'ice_type'
+    assert ice_type.write_fn is not None
+
+
+def test_icemaker_one_type_absent_on_tp1x():
+    """The TP1X's /icemaker/one/vs/0 has no iceType.supported list, so the
+    ice-type select does not materialize -- TP1X stays on/off only."""
+    state = _state()
+    assert 'icemaker_one_type' not in state
 
 
 def test_water_filter_reset_button_writes_the_reported_reset_type():
