@@ -1,6 +1,10 @@
-"""Capabilities for the refrigerator family (Samsung RF9000B-class).
+"""Capabilities for the refrigerator family.
 
-Resources verified against the dump at local-tools/dumps/10.0.0.254.json.
+Resources verified against two dumps, kept as fixtures: an RF9000B-class
+fridge (tests/fixtures/refrigerator_device.json) and a TP1X_REF_21K
+(tests/fixtures/refrigerator_tp1x_device.json). The latter is the simpler
+shape -- one toggle ice maker, no flex zone, no cabinet lighting -- so
+several capabilities here gate on presence rather than assuming RF9000B.
 
 Temperature unit is read live from each resource, not assumed: the RF9000B
 dump reports Fahrenheit ("units": "F" / "x.com.samsung.da.unit": "Fahrenheit"),
@@ -234,6 +238,14 @@ SELF_CHECK = Capability(
         SensorDesc(key='selfcheck_result', field='x.com.samsung.da.result',
                    name='Self-check result', icon='mdi:clipboard-check-outline',
                    entity_category='diagnostic'),
+        # List of error codes from the last self-check; joined for display.
+        # Not every fridge reports the field, hence the exists_fn.
+        SensorDesc(key='selfcheck_error', field='x.com.samsung.da.error',
+                   name='Self-check error', icon='mdi:alert-circle-outline',
+                   entity_category='diagnostic',
+                   exists_fn=lambda rep, resources: (
+                       'x.com.samsung.da.error' in rep),
+                   value_fn=lambda v: ', '.join(v) if isinstance(v, list) else v),
         ButtonDesc(key='selfcheck_start', field='', name='Start self-check',
                    payload='Start', icon='mdi:play-circle-outline',
                    entity_category='diagnostic',
@@ -511,6 +523,10 @@ def _flex_zone_write(p, rep, href=None):
 
 FLEX_ZONE = Capability(
     href='/mode/vs/0',
+    # Only binds on hardware that advertises the flex-zone option list;
+    # MODE_FLAGS below covers the other /mode/vs/0 shape (see there).
+    match_fn=lambda rep, resources: bool(
+        rep.get('x.com.samsung.da.supportedOptions')),
     poll_tier='warm',
     entities=(
         SelectDesc(key='flex_zone_mode',
@@ -525,6 +541,76 @@ FLEX_ZONE = Capability(
                        (m for m in (modes or [])
                         if m.startswith('CV_TTYPE_RF9000A_')), None),
                    write_fn=_flex_zone_write),
+    ),
+)
+
+# ---------------------------------------------------------------------------
+# Mode flags (/mode/vs/0 on fridges without a flex zone, e.g. TP1X_REF_21K)
+#
+# Same resource as FLEX_ZONE, different shape: x.com.samsung.da.modes carries
+# orthogonal state flags ("RVACATION_OFF", "FCONVERT_FREEZER", ...) but there
+# is no x.com.samsung.da.supportedOptions list. The two capabilities are
+# mutually exclusive on that field, so /mode/vs/0 never double-binds.
+#
+# Read-only: the modes list mixes independent flags with no documented
+# per-flag write contract, so nothing here writes back to /mode/vs/0.
+# ---------------------------------------------------------------------------
+
+def _mode_token(modes, prefix):
+    return next((m for m in (modes or []) if m.startswith(prefix)), None)
+
+
+def _has_mode_token(prefix):
+    return lambda rep, resources: _mode_token(
+        rep.get('x.com.samsung.da.modes'), prefix) is not None
+
+
+MODE_FLAGS = Capability(
+    href='/mode/vs/0',
+    match_fn=lambda rep, resources: not rep.get(
+        'x.com.samsung.da.supportedOptions'),
+    poll_tier='warm',
+    entities=(
+        BinarySensorDesc(key='vacation_mode', field='x.com.samsung.da.modes',
+                         name='Vacation mode', icon='mdi:bag-suitcase',
+                         entity_category='diagnostic',
+                         exists_fn=_has_mode_token('RVACATION_'),
+                         value_fn=lambda modes: _mode_token(
+                             modes, 'RVACATION_') == 'RVACATION_ON'),
+        # Deliberately no device_class='enum': the observed code set is
+        # incomplete, and an unlisted code must still render (as the raw
+        # lowercased token) rather than be rejected by HA.
+        SensorDesc(key='convertible_compartment',
+                   field='x.com.samsung.da.modes',
+                   name='Convertible compartment', icon='mdi:swap-horizontal',
+                   translation_key='convertible_compartment',
+                   entity_category='diagnostic',
+                   exists_fn=_has_mode_token('FCONVERT_'),
+                   value_fn=lambda modes: (
+                       _mode_token(modes, 'FCONVERT_') or '').lower() or None),
+    ),
+)
+
+# ---------------------------------------------------------------------------
+# AI energy-saving level
+#
+# supportedAiLevel is a single-entry list ('1' only) on some hardware, where
+# a select would offer no real choice — gated to >1 supported level.
+# ---------------------------------------------------------------------------
+
+AI_ENERGY_LEVEL = Capability(
+    href='/energy/ailevel/vs/0',
+    poll_tier='cold',
+    entities=(
+        SelectDesc(key='ai_energy_level', field='aiLevel',
+                   name='AI energy level', icon='mdi:leaf',
+                   translation_key='ai_energy_level',
+                   entity_category='config',
+                   options_field='supportedAiLevel',
+                   exists_fn=lambda rep, resources: len(
+                       rep.get('supportedAiLevel') or ()) > 1,
+                   write_fn=lambda p, rep, href=None: (
+                       ['energy', 'ailevel', 'vs', '0'], {'aiLevel': p})),
     ),
 )
 
@@ -652,6 +738,29 @@ ICEMAKER_STATUS_FALLBACK = Capability(
                    write_fn=lambda p, rep, href=None: (
                        ['icemaker', 'status', 'vs', '0'],
                        {'x.com.samsung.da.iceMaker': 'On' if p else 'Off'})),
+    ),
+)
+
+# OCF-native twin of /icemaker/status/vs/0 ({"status": "On"} instead of
+# {"x.com.samsung.da.iceMaker": "On"}). Declines for the same reason the
+# vendor fallback does -- a richer /icemaker/<unit>/vs/0 already covers it --
+# and additionally declines when the vendor twin is present, so the two
+# fallbacks can never both produce ice_maker_enabled.
+ICEMAKER_STATUS_OCF_FALLBACK = Capability(
+    href='/icemaker/status/0',
+    match_fn=lambda rep, resources: (
+        not _any_icemaker_unit_generic(resources)
+        and '/icemaker/status/vs/0' not in resources),
+    poll_tier='warm',
+    entities=(
+        SwitchDesc(key='ice_maker_enabled', field='status',
+                   name='Ice maker', icon='mdi:cube-outline',
+                   value_fn=lambda v: v == 'On',
+                   # Write contract unverified against hardware: assumed to
+                   # mirror the vendor href with the OCF field name.
+                   write_fn=lambda p, rep, href=None: (
+                       ['icemaker', 'status', '0'],
+                       {'status': 'On' if p else 'Off'})),
     ),
 )
 

@@ -130,3 +130,28 @@ class TestEnergyMeter:
         phantom power sensor (the exists_fn replaces the field-presence gate)."""
         pw = next(e for e in common.ENERGY_METER.entities if e.key == 'power_watts')
         assert pw.exists_fn({'x.com.samsung.da.cumulativePower': '5'}, {}) is False
+
+
+# ---------------------------------------------------------------------------
+# Water-filter reset button. filterResetType's shape (list vs scalar) is
+# UNVERIFIED against hardware, so the write_fn must survive both: unwrap the
+# first element of a list, or pass a scalar string/number through unchanged.
+# ---------------------------------------------------------------------------
+
+
+class TestWaterFilterReset:
+    def _button(self):
+        return next(e for e in common.WATER_FILTER.entities
+                    if e.key == 'filter_reset')
+
+    def test_write_fn_unwraps_list_filter_reset_type(self):
+        rep = {'x.com.samsung.da.filterResetType': ['replaceable']}
+        path, body = self._button().write_fn('', rep)
+        assert path == ['filter', 'waterfilter', 'vs', '0']
+        assert body == {'x.com.samsung.da.filterResetType': 'replaceable'}
+
+    def test_write_fn_passes_scalar_filter_reset_type_through(self):
+        rep = {'x.com.samsung.da.filterResetType': 'replaceable'}
+        path, body = self._button().write_fn('', rep)
+        assert path == ['filter', 'waterfilter', 'vs', '0']
+        assert body == {'x.com.samsung.da.filterResetType': 'replaceable'}

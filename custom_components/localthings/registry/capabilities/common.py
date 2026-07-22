@@ -11,7 +11,7 @@ against live device dumps:
   /filter/waterfilter/vs/0  -> x.com.samsung.da.filterUsage / filterStatus
 """
 from ..capability import Capability
-from ..entities import BinarySensorDesc, SensorDesc, SwitchDesc
+from ..entities import BinarySensorDesc, ButtonDesc, SensorDesc, SwitchDesc
 
 
 def _num(v):
@@ -47,6 +47,20 @@ def normalize_temp_unit(raw, default='°F'):
 def _ml_to_l(v):
     n = _num(v)
     return round(n / 1000.0, 1) if n is not None else None
+
+
+def _filter_reset_value(rep):
+    """Value to write back for a water-filter reset.
+
+    Contract UNVERIFIED against hardware: firmware may report
+    filterResetType as a list (use its first element) or as a scalar
+    string/number (use as-is). Guard against both so a scalar isn't
+    silently indexed down to its first character.
+    """
+    v = rep.get('x.com.samsung.da.filterResetType')
+    if isinstance(v, (list, tuple)):
+        return v[0] if v else None
+    return v
 
 
 def _active_alarm_codes(items):
@@ -197,5 +211,17 @@ WATER_FILTER = Capability(
                    icon='mdi:filter'),
         SensorDesc(key='filter_status', field='x.com.samsung.da.filterStatus',
                    name='Filter status', icon='mdi:filter-check'),
+        # Write contract UNVERIFIED against hardware: assumed to be a write
+        # of the device's own filterResetType value back to the resource.
+        # filterResetType may arrive as a list or a scalar; _filter_reset_value
+        # normalizes both (see its docstring).
+        ButtonDesc(key='filter_reset', field='', name='Reset water filter',
+                   icon='mdi:filter-remove', entity_category='config',
+                   exists_fn=lambda rep, resources: bool(
+                       rep.get('x.com.samsung.da.filterResetType')),
+                   write_fn=lambda p, rep, href=None: (
+                       ['filter', 'waterfilter', 'vs', '0'],
+                       {'x.com.samsung.da.filterResetType':
+                        _filter_reset_value(rep)})),
     ),
 )

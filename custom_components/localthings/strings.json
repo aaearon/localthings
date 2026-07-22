@@ -119,6 +119,12 @@
           "02": "2x",
           "03": "3x"
         }
+      },
+      "ai_energy_level": {
+        "state": {
+          "1": "Level 1",
+          "2": "Level 2"
+        }
       }
     },
     "sensor": {
@@ -146,6 +152,12 @@
           "normal": "Normal",
           "wash": "Wash",
           "replace": "Replace"
+        }
+      },
+      "convertible_compartment": {
+        "state": {
+          "fconvert_freezer": "Freezer",
+          "fconvert_fridge": "Fridge"
         }
       }
     },
