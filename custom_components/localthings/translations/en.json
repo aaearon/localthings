@@ -16,14 +16,6 @@
           "100": "High"
         }
       },
-      "ice_type": {
-        "state": {
-          "off": "Off",
-          "whiskey_iceball_3": "3 Balls/Day",
-          "whiskey_iceball_6": "6 Balls/Day",
-          "whiskey_iceball_9": "9 Balls/Day"
-        }
-      },
       "beverage_zone_mode": {
         "state": {
           "sp_ttype_beer_drinks": "Beverage",
@@ -152,11 +144,6 @@
           "normal": "Normal",
           "wash": "Wash",
           "replace": "Replace"
-        }
-      },
-      "ice_type": {
-        "state": {
-          "normal": "Cubed ice"
         }
       },
       "convertible_compartment": {

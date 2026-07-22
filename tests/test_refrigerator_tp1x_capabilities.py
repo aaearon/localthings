@@ -3,7 +3,6 @@ from custom_components.localthings.registry.adapter import flatten
 from custom_components.localthings.registry.by_type import for_device_by_model
 from custom_components.localthings.registry.capabilities import common, fridge, ignored
 from custom_components.localthings.registry.discovery import discover
-from custom_components.localthings.registry.entities import SelectDesc, SensorDesc
 
 from tests.conftest import _load_device
 
@@ -40,7 +39,7 @@ def test_no_unbound_hrefs():
 def test_expected_entities_present():
     state = _state()
     for key in ('ai_energy_level', 'vacation_mode', 'convertible_compartment',
-                'selfcheck_error', 'icemaker_one_type', 'icemaker_one_enabled',
+                'selfcheck_error', 'icemaker_one_enabled',
                 'freezer_temperature', 'cooler_setpoint'):
         assert key in state, key
 
@@ -109,14 +108,14 @@ def test_ai_energy_level_hidden_with_a_single_supported_level():
     assert desc.exists_fn({'aiLevel': '1', 'supportedAiLevel': ['1', '2']}, {})
 
 
-def test_ice_type_sensor_replaces_select_without_a_supported_list():
-    ice_type = [e for e in fridge.ICEMAKER_GENERIC.entities if e.key == 'type']
-    select = next(e for e in ice_type if isinstance(e, SelectDesc))
-    sensor = next(e for e in ice_type if isinstance(e, SensorDesc))
-    toggle = {'x.com.samsung.da.iceType.desired': 'NORMAL'}
-    mode = dict(toggle, **{'x.com.samsung.da.iceType.supported': ['NORMAL']})
-    assert sensor.exists_fn(toggle, {}) and not select.exists_fn(toggle, {})
-    assert select.exists_fn(mode, {}) and not sensor.exists_fn(mode, {})
+def test_icemaker_generic_has_no_ice_type_entity():
+    """The TP1X's ice maker is on/off only (x.com.samsung.da.iceMaker.type is
+    'toggle' and iceType.desired is a fixed 'NORMAL' with no iceType.supported
+    list) -- ICEMAKER_GENERIC must not expose an ice-type select or sensor."""
+    assert not any(e.key == 'type' or e.translation_key == 'ice_type'
+                   for e in fridge.ICEMAKER_GENERIC.entities)
+    assert {e.key for e in fridge.ICEMAKER_GENERIC.entities} == {
+        'making_status', 'enabled'}
 
 
 def test_water_filter_reset_button_writes_the_reported_reset_type():

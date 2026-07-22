@@ -28,7 +28,7 @@ from ..entities import (
 )
 from .common import normalize_temp_unit
 
-# Display names for the beverage zone, flex zone, ice type, and
+# Display names for the beverage zone, flex zone, and
 # ice-making-status enums below live in strings.json / translations/en.json,
 # keyed by the lowercased raw device value — select.py and SensorDesc.options
 # normalize to lowercase for HA's translation lookup and map back to this
@@ -129,27 +129,6 @@ ICEMAKER_GENERIC = Capability(
                    name=None, icon='mdi:cube-outline',
                    value_fn=lambda v: v == 'On',
                    write_fn=_icemaker_write('x.com.samsung.da.iceMaker.state')),
-        SelectDesc(key='type', field='x.com.samsung.da.iceType.desired',
-                   name=None, icon='mdi:cube-outline',
-                   translation_key='ice_type',
-                   entity_category='config',
-                   options_field='x.com.samsung.da.iceType.supported',
-                   exists_fn=lambda rep, resources: bool(rep.get('x.com.samsung.da.iceType.supported')),
-                   write_fn=_icemaker_write('x.com.samsung.da.iceType.desired')),
-        # Toggle-type ice makers report iceType.desired without an
-        # iceType.supported list ("NORMAL" is the only value ever observed),
-        # so there is no evidence-backed option set to build a writable
-        # select from. Exposed read-only instead; same key as the select
-        # above, and the two exists_fn are mutually exclusive on
-        # iceType.supported so only one of them ever materializes.
-        SensorDesc(key='type', field='x.com.samsung.da.iceType.desired',
-                   name=None, icon='mdi:cube-outline',
-                   translation_key='ice_type',
-                   entity_category='diagnostic',
-                   exists_fn=lambda rep, resources: bool(
-                       rep.get('x.com.samsung.da.iceType.desired'))
-                   and not rep.get('x.com.samsung.da.iceType.supported'),
-                   value_fn=lambda v: v.lower() if isinstance(v, str) else v),
     ),
 )
 
